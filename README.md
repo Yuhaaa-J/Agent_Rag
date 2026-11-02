@@ -106,7 +106,9 @@ src/agent_rag/
 evals/
 ├── golden_set.yaml     评测集，每加一批文档就补 3-5 题
 └── run_eval.py         独立评测脚本（CI 友好）
-tests/                  21 个单元测试，不需要 API key、不需要下载模型
+tests/                  17 个单元测试，不需要 API key、不需要下载模型
+scripts/
+└── verify_hitl.py      集成验证：证明"确认前工具没执行、确认后只扣一次、重复请求幂等"
 ```
 
 ---
@@ -134,6 +136,12 @@ decision = interrupt({"type": "confirmation_required", "action": pending})
 第一次 `astream` 跑到这里就**挂起并返回**，请假一行都没执行。
 用户点确认后 `POST /confirm` → `Command(resume={"approved": True})` 从断点继续。
 对比旧写法：在 `on_tool_start` 里 `return` 只是让前端断开流，工具早就跑完了。
+
+想自己验证这一点（需要真实 key，会打印确认前后的年假余额）：
+
+```bash
+uv run python scripts/verify_hitl.py
+```
 
 ### 4. 身份从请求上下文走
 
