@@ -74,7 +74,7 @@ def ingest_paths(
     *,
     base: Path | None = None,
     reset: bool = False,
-    prune: bool = True,
+    prune: bool = False,
     store: ChromaStore | None = None,
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,

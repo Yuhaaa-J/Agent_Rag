@@ -43,7 +43,9 @@ def ingest(
         seed_demo_balances()
 
     base = directory if directory.is_dir() else directory.parent
-    stats = ingest_paths([directory], base=base, reset=reset)
+    # 只有按目录整体入库时才允许清理孤儿 chunk；
+    # 单个文件入库时绝对不能 prune，否则会把库里其它文档一起删掉。
+    stats = ingest_paths([directory], base=base, reset=reset, prune=directory.is_dir())
     typer.echo(f"✅ {stats.summary()}")
 
 

@@ -74,3 +74,21 @@ def test_deleted_file_prunes_chunks(tmp_path, tmp_settings):
 
     assert stats.removed == 1
     assert set(store.data) == {"a.md"}
+
+
+def test_single_file_ingest_does_not_prune_others(tmp_path, tmp_settings):
+    """单文件入库不能清理别的文档。
+
+    CLI 里 prune=directory.is_dir()，这里模拟"只入库一个文件"的场景，
+    锁死这个行为：否则用户往已有知识库里追加一个 PDF，会把库里其它文档全删掉。
+    """
+    src = tmp_path / "docs"
+    _write(src / "a.md", "# A\n\n内容一。")
+    _write(src / "b.md", "# B\n\n内容二。")
+
+    store = FakeStore()
+    ingest_paths([src], base=src, store=store)
+    assert set(store.data) == {"a.md", "b.md"}
+
+    ingest_paths([src / "b.md"], base=src, store=store, prune=False)
+    assert set(store.data) == {"a.md", "b.md"}, "单文件入库误删了其它文档"
