@@ -1,0 +1,40 @@
+# ---- secrets: never commit ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- runtime state ----
+var/
+data/raw/
+*.sqlite
+*.sqlite3
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# ---- tooling / os ----
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ---- model caches ----
+.cache/
+models/
+*.onnx
+
+# 任何运行期目录都不进仓库
+var*/
+pytest-of-*/
+.pytest_tmp/
+

@@ -1,0 +1,42 @@
+# 检索评测集。
+# 你的工作流：每加一批真实文档，就往这里补 3-5 道题，同时标好预期来源和关键事实。
+# 题目应该覆盖：直问、换个说法问、带编号/专有名词的问、跨章节的问。
+#
+# 字段：
+#   expected_sources  正确文件（相对 data/raw 的路径）
+#   must_contain      答案里必须出现的关键事实（金额、天数、分机号……）
+
+- id: q01
+  question: 公司的核心工作时间是几点到几点？
+  expected_sources: [company_rules.md]
+  must_contain: ["10:00", "16:00"]
+
+- id: q02
+  question: 忘记打卡了怎么办，一个月能有几次机会？
+  expected_sources: [company_rules.md]
+  must_contain: ["补签", "3"]
+
+- id: q03
+  question: 入职满三年有几天年假？
+  expected_sources: [company_rules.md]
+  must_contain: ["10 天"]
+
+- id: q04
+  question: 请病假需要什么材料，工资怎么发？
+  expected_sources: [company_rules.md]
+  must_contain: ["病假证明", "80%"]
+
+- id: q05
+  question: 报销单最晚多久之内要提交？
+  expected_sources: [company_rules.md]
+  must_contain: ["14 天"]
+
+- id: q06
+  question: 单笔超过五千块的报销需要谁审批？
+  expected_sources: [company_rules.md]
+  must_contain: ["5000", "审批"]
+
+- id: q07
+  question: 电脑坏了打哪个分机号？
+  expected_sources: [company_rules.md]
+  must_contain: ["8888"]
