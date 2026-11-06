@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-rag · 知识库助手</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e6e8ee; --muted:#9aa3b2; --accent:#4f8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text);
+         font-family: system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  .spacer { flex:1; }
+  header label { font-size:12px; color:var(--muted); }
+  header input { width:96px; padding:4px 8px; font-size:12px; color:var(--text);
+                 background:#0f1115; border:1px solid var(--line); border-radius:6px; }
+  .badge { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+  #log { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+  .msg { max-width:min(880px,92%); padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.65;
+         white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:var(--accent); color:#fff; }
+  .bot { align-self:flex-start; background:var(--panel); border:1px solid var(--line); }
+  .tool { align-self:flex-start; font-size:12px; color:var(--muted); border-left:2px solid var(--line); padding-left:10px; white-space:pre-wrap; }
+  .confirm { align-self:flex-start; max-width:min(880px,92%); background:#2a2416; border:1px solid #5a4a1e;
+             border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.6; white-space:pre-wrap; }
+  .confirm .row { display:flex; gap:8px; margin-top:10px; }
+  button { cursor:pointer; padding:6px 14px; font-size:13px; border-radius:8px;
+           border:1px solid var(--line); background:var(--panel); color:var(--text); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  footer { display:flex; gap:10px; padding:12px 16px; border-top:1px solid var(--line); background:var(--panel); }
+  #q { flex:1; height:44px; padding:12px; font-size:14px; font-family:inherit; resize:none;
+       color:var(--text); background:#0f1115; border:1px solid var(--line); border-radius:10px; }
+  #q:focus { outline:1px solid var(--accent); }
+  .hint { padding:0 16px 10px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>agent-rag · 知识库助手</h1>
+  <span class="badge" id="chunks">chunks -</span>
+  <div class="spacer"></div>
+  <label>当前用户</label>
+  <input id="user" value="张三">
+</header>
+
+<div id="log"></div>
+<div class="hint">试试：MSTP 里 region-name 怎么配置　／　入职满三年有几天年假　／　帮我请两天病假，去医院复查</div>
+
+<footer>
+  <textarea id="q" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+  <button class="primary" id="send">发送</button>
+</footer>
+
+<script>
+var log = document.getElementById('log');
+var q = document.getElementById('q');
+var userInput = document.getElementById('user');
+var threadId = null;
+var busy = false;
+
+function make(cls, text) {
+  var d = document.createElement('div');
+  d.className = cls;
+  if (text !== undefined && text !== null) d.textContent = text;
+  return d;
+}
+function toBottom() { log.scrollTop = log.scrollHeight; }
+
+fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+  document.getElementById('chunks').textContent = 'chunks ' + d.chunks;
+}).catch(function () {});
+
+function headers() {
+  return { 'Content-Type': 'application/json', 'X-User': (userInput.value || 'demo').trim() };
+}
+
+async function send() {
+  var text = q.value.trim();
+  if (!text || busy) return;
+  busy = true;
+  document.getElementById('send').disabled = true;
+  q.value = '';
+
+  log.appendChild(make('msg user', text));
+  var bot = make('msg bot', '');
+  log.appendChild(bot);
+  toBottom();
+
+  var full = '';
+  var confirmation = null;
+
+  try {
+    var resp = await fetch('/chat', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ message: text, thread_id: threadId })
+    });
+    if (!resp.ok || !resp.body) {
+      bot.textContent = '请求失败: HTTP ' + resp.status;
+      return;
+    }
+
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += decoder.decode(chunk.value, { stream: true });
+
+      var idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        var frame = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        var line = null;
+        var parts = frame.split('\n');
+        for (var i = 0; i < parts.length; i++) {
+          if (parts[i].indexOf('data: ') === 0) { line = parts[i]; break; }
+        }
+        if (!line) continue;
+
+        var ev;
+        try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+
+        if (ev.type === 'start') {
+          threadId = ev.thread_id;
+        } else if (ev.type === 'token') {
+          full += ev.text;
+          bot.textContent = full;
+          toBottom();
+        } else if (ev.type === 'tool_result') {
+          log.appendChild(make('tool', '🔧 ' + (ev.tool || '工具') + '：' + (ev.preview || '')));
+          toBottom();
+        } else if (ev.type === 'confirmation_required') {
+          confirmation = ev;
+        } else if (ev.type === 'error') {
+          bot.textContent = (full || '') + '\n[错误] ' + ev.message;
+        }
+      }
+    }
+    if (!full && !bot.textContent) bot.textContent = '（没有输出）';
+  } catch (e) {
+    bot.textContent = '网络错误: ' + e.message;
+  } finally {
+    busy = false;
+    document.getElementById('send').disabled = false;
+    if (confirmation) showConfirm(confirmation);
+  }
+}
+
+function showConfirm(ev) {
+  var box = make('confirm');
+  box.appendChild(make('div', '⚠️ ' + (ev.message || '需要确认') + '\n' + (ev.summary || '')));
+  var row = document.createElement('div');
+  row.className = 'row';
+  var yes = document.createElement('button');
+  yes.className = 'primary';
+  yes.textContent = '确认执行';
+  var no = document.createElement('button');
+  no.textContent = '取消';
+  yes.onclick = function () { decide(true, box); };
+  no.onclick = function () { decide(false, box); };
+  row.appendChild(yes);
+  row.appendChild(no);
+  box.appendChild(row);
+  log.appendChild(box);
+  toBottom();
+}
+
+async function decide(approved, box) {
+  var buttons = box.querySelectorAll('button');
+  for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+  try {
+    var resp = await fetch('/confirm', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ thread_id: threadId, approved: approved })
+    });
+    var data = await resp.json();
+    box.appendChild(make('div', '→ ' + (data.reply || '')));
+  } catch (e) {
+    box.appendChild(make('div', '→ 失败: ' + e.message));
+  }
+  toBottom();
+}
+
+document.getElementById('send').onclick = send;
+q.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+</script>
+</body>
+</html>

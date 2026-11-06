@@ -35,6 +35,11 @@ def ingest(
     directory: Path = typer.Argument(Path("data/sample"), help="要入库的目录或单个文件"),
     reset: bool = typer.Option(False, "--reset", help="忽略 hash，全部重新向量化"),
     seed: bool = typer.Option(True, help="同时写入演示用的年假余额"),
+    prune: bool = typer.Option(
+        False,
+        "--prune",
+        help="清理该目录下已不存在的文档。会连带删除不在本次目录里的其它来源，慎用",
+    ),
 ) -> None:
     """把文档灌进向量库（幂等，重复跑不会重复写）。"""
     settings = get_settings()
@@ -43,9 +48,12 @@ def ingest(
         seed_demo_balances()
 
     base = directory if directory.is_dir() else directory.parent
-    # 只有按目录整体入库时才允许清理孤儿 chunk；
-    # 单个文件入库时绝对不能 prune，否则会把库里其它文档一起删掉。
-    stats = ingest_paths([directory], base=base, reset=reset, prune=directory.is_dir())
+    # prune 默认关闭：它按"本次扫到的文件"推断其它文档已删除，
+    # 只入库 data/sample 时会把用绝对路径入的 PDF chunk 一起清掉。
+    # 想清理已删文件请显式加 --prune，且只对目录生效。
+    stats = ingest_paths(
+        [directory], base=base, reset=reset, prune=prune and directory.is_dir()
+    )
     typer.echo(f"✅ {stats.summary()}")
 
 

@@ -23,6 +23,7 @@ dependencies = [
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
     "pypdf>=5.0",
+    "python-multipart>=0.0.9",
     "pyyaml>=6.0",
     "rank-bm25>=0.2.2",
     "sentence-transformers>=3.0",
@@ -58,3 +59,4 @@ select = ["E", "F", "I", "UP", "B"]
 # typer / FastAPI 的声明式默认值就是这个写法，B008 是误报
 "src/agent_rag/cli.py" = ["B008"]
 "src/agent_rag/api/app.py" = ["B008"]
+

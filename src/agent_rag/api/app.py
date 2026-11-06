@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
@@ -201,3 +201,16 @@ async def confirm(req: ConfirmRequest, x_user: str = Header(default="demo")) -> 
     messages = state.get("messages") or []
     reply = _text_of(messages[-1]) if messages else ""
     return ConfirmResponse(status="ok", reply=reply or "已完成")
+
+# --------------------------------------------------------------------------- #
+# 简易 Web UI
+# --------------------------------------------------------------------------- #
+_STATIC_DIR = Path(__file__).resolve().parents[3] / "static"
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> FileResponse:
+    page = _STATIC_DIR / "index.html"
+    if not page.exists():
+        raise HTTPException(404, "static/index.html 不存在")
+    return FileResponse(page, media_type="text/html")
