@@ -217,3 +217,29 @@ uv run python evals/run_eval.py --min-recall 0.8   # CI 卡口：低于 80% 退�
 - 密钥一旦泄露到聊天记录 / 公开仓库，**必须立刻吊销重发**，改代码没用。
 - 上传接口限制后缀、大小，并用 `Path(name).name` 去掉客户端传来的路径部分（防目录穿越）。
 - 写操作走确认流程 + 幂等键，重复请求不会重复扣减。
+
+---
+
+## 故障排查
+
+### `InternalError: error returned from database: (code: 14) unable to open database file`
+
+**这不是数据库损坏。** 这个错误来自 Chroma 的 Rust 层（SQLite），而 SQLite 在
+Windows 上会读 `TEMP`/`TMP` 环境变量来建临时文件。系统临时目录一旦处于病态
+（权限被改乱、被安全软件拦住），建临时文件失败，SQLite 就返回
+`SQLITE_CANTOPEN (14)`，Chroma 把它原样抛出来，看着像"打不开库"。
+
+判断库文件本身是否正常：
+
+```bash
+uv run python -c "import sqlite3; sqlite3.connect(r'var/chroma/chroma.sqlite3').close(); print('库文件本身正常')"
+```
+
+项目已自带兜底：`config.ensure_writable_temp()` 会在创建 Chroma 客户端**之前**
+把 `TEMP`/`TMP`/`TMPDIR` 指向项目内的 `var/tmp`（先探测可写，不可写才放弃）。
+所以正常情况下不需要管它。若仍报同样的错，说明连 `var/tmp` 都不可写，
+检查一下目录权限。
+
+想从根上修，就修系统临时目录。参考症状：在该目录下用 Python `tempfile`
+建文件会卡住，而 `[System.IO.File]::WriteAllText` 却是快的 —— 说明不是简单的
+ACL 拒绝，而是有安全软件或过滤驱动在拦某类文件创建。

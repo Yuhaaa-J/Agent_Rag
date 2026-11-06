@@ -13,7 +13,7 @@ from pathlib import Path
 
 import chromadb
 
-from ..config import get_settings
+from ..config import ensure_writable_temp, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,8 @@ Embedder = Callable[[list[str]], list[list[float]]]
 class ChromaStore:
     def __init__(self, path: Path, collection_name: str) -> None:
         path.mkdir(parents=True, exist_ok=True)
+        # 必须在创建客户端之前：SQLite 打开库的瞬间就会读 TEMP
+        ensure_writable_temp()
         self._client = chromadb.PersistentClient(path=str(path))
         # cosine 距离：bge 系列都是归一化向量，用 cosine 而不是 l2
         self._collection = self._client.get_or_create_collection(
